@@ -1,56 +1,130 @@
 import java.io.*;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.*;
 import java.util.*;
 import java.util.regex.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class VersionUtil {
 
+    static final String GITHUB_REPO = "innovai-labs/aictx-cli";
+    static final String GITHUB_BRANCH = "main";
+
+    public static Path getContextCacheDir() {
+        return Path.of(System.getProperty("user.home"), ".aictx", "context");
+    }
+
     /**
-     * Attempt to resolve the context root from the JBang cache or relative path.
-     * When installed via JBang git, the repo is cloned and the context dir is at ../../context
-     * relative to the tools/aictx directory. We try multiple strategies.
+     * Resolve the context root using multiple strategies:
+     * 1. AICTX_CONTEXT_ROOT env var (explicit override)
+     * 2. ./context relative to CWD (local development from repo root)
+     * 3. ~/.aictx/context/ cache (auto-downloaded from GitHub)
      */
     public static Path resolveContextRoot() {
-        // Strategy 1: AICTX_CONTEXT_ROOT env var (for development)
+        // Strategy 1: AICTX_CONTEXT_ROOT env var (for development / explicit override)
         String envRoot = System.getenv("AICTX_CONTEXT_ROOT");
         if (envRoot != null) {
             Path p = Path.of(envRoot);
             if (Files.isDirectory(p)) return p;
         }
 
-        // Strategy 2: relative to this source file's location (JBang clones the repo)
-        // When JBang runs from git, the working dir is typically the JBang cache
-        // but the source is in the cloned repo. We can detect via system property.
-        String jbangDir = System.getProperty("jbang.dir");
-        if (jbangDir != null) {
-            // jbang.dir points to the directory containing the script
-            Path scriptDir = Path.of(jbangDir);
-            Path contextDir = scriptDir.resolve("../../context").normalize();
-            if (Files.isDirectory(contextDir)) return contextDir;
+        // Strategy 2: check relative to CWD (for local development: jbang tools/aictx/aictx.java)
+        Path localContext = Path.of("context");
+        if (Files.isDirectory(localContext) && Files.exists(localContext.resolve("globals"))) {
+            return localContext.toAbsolutePath();
         }
 
-        // Strategy 3: check relative to CWD (for local development: jbang tools/aictx/aictx.java)
-        Path localContext = Path.of("context");
-        if (Files.isDirectory(localContext)) return localContext.toAbsolutePath();
+        // Strategy 3: cached context at ~/.aictx/context/
+        Path cachedContext = getContextCacheDir();
+        if (isValidContextDir(cachedContext)) {
+            return cachedContext;
+        }
 
-        // Strategy 4: check relative to the script location via class resource
+        // Strategy 4: auto-download from GitHub
         try {
-            Path classLocation = Path.of(VersionUtil.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI());
-            // Navigate up from build/cache dir
-            Path candidate = classLocation.getParent();
-            for (int i = 0; i < 6; i++) {
-                if (candidate == null) break;
-                Path ctx = candidate.resolve("context");
-                if (Files.isDirectory(ctx) && Files.exists(ctx.resolve("globals"))) {
-                    return ctx;
-                }
-                candidate = candidate.getParent();
+            System.out.println("Context library not found locally. Downloading from GitHub...");
+            downloadContext(cachedContext);
+            if (isValidContextDir(cachedContext)) {
+                System.out.println("Context library cached at " + cachedContext);
+                return cachedContext;
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            System.err.println("Failed to download context library: " + e.getMessage());
         }
 
         return null;
+    }
+
+    static boolean isValidContextDir(Path dir) {
+        return Files.isDirectory(dir) && Files.exists(dir.resolve("globals"));
+    }
+
+    /**
+     * Download the context directory from the GitHub repo archive and extract it to targetDir.
+     */
+    public static void downloadContext(Path targetDir) throws Exception {
+        String url = "https://github.com/" + GITHUB_REPO + "/archive/refs/heads/" + GITHUB_BRANCH + ".zip";
+
+        HttpClient client = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .build();
+        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+        if (response.statusCode() != 200) {
+            throw new IOException("HTTP " + response.statusCode() + " fetching context library from " + url);
+        }
+
+        // Clean target dir if it exists (for updates)
+        if (Files.isDirectory(targetDir)) {
+            try (var walk = Files.walk(targetDir)) {
+                walk.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+            }
+        }
+        Files.createDirectories(targetDir);
+
+        try (ZipInputStream zis = new ZipInputStream(response.body())) {
+            ZipEntry entry;
+            String contextPrefix = null;
+
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName();
+
+                // Detect the context/ prefix from the archive (e.g., "aictx-cli-main/context/")
+                if (contextPrefix == null) {
+                    int slash = name.indexOf('/');
+                    if (slash > 0) {
+                        contextPrefix = name.substring(0, slash + 1) + "context/";
+                    }
+                }
+
+                if (contextPrefix == null || !name.startsWith(contextPrefix)) {
+                    zis.closeEntry();
+                    continue;
+                }
+
+                String relativePath = name.substring(contextPrefix.length());
+                if (relativePath.isEmpty()) {
+                    zis.closeEntry();
+                    continue;
+                }
+
+                Path outPath = targetDir.resolve(relativePath);
+                if (entry.isDirectory()) {
+                    Files.createDirectories(outPath);
+                } else {
+                    Files.createDirectories(outPath.getParent());
+                    Files.copy(zis, outPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                zis.closeEntry();
+            }
+        }
     }
 
     /**

@@ -28,6 +28,7 @@ import java.util.concurrent.Callable;
                 AictxVersion.class,
                 AictxInit.class,
                 AictxSetup.class,
+                AictxFetchContext.class,
                 AictxUpgrade.class,
                 AictxUpdateCheck.class
         })
@@ -207,7 +208,8 @@ class AictxSetup implements Callable<Integer> {
 
         Path contextRoot = VersionUtil.resolveContextRoot();
         if (contextRoot == null) {
-            System.err.println("Cannot locate context library. Ensure aictx is installed via JBang from the git repo.");
+            System.err.println("Cannot locate context library.");
+            System.err.println("Try: aictx fetch-context");
             return 1;
         }
 
@@ -228,6 +230,26 @@ class AictxSetup implements Callable<Integer> {
     }
 }
 
+// ── fetch-context ────────────────────────────────────────────────────────────
+
+@Command(name = "fetch-context", description = "Download or update the context library from GitHub")
+class AictxFetchContext implements Callable<Integer> {
+
+    @Override
+    public Integer call() throws Exception {
+        java.nio.file.Path targetDir = VersionUtil.getContextCacheDir();
+        System.out.println("Downloading context library from GitHub...");
+        try {
+            VersionUtil.downloadContext(targetDir);
+            System.out.println("Context library cached at " + targetDir);
+            return 0;
+        } catch (Exception e) {
+            System.err.println("Failed to download context library: " + e.getMessage());
+            return 1;
+        }
+    }
+}
+
 // ── upgrade ──────────────────────────────────────────────────────────────────
 
 @Command(name = "upgrade", description = "Upgrade aictx to the latest version")
@@ -239,11 +261,12 @@ class AictxUpgrade implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         String latestTag = VersionUtil.fetchLatestTag();
+        String installCmd = "jbang app install --fresh --force --name aictx aictx@" + VersionUtil.GITHUB_REPO;
+
         if (latestTag == null) {
             System.out.println("Could not determine latest version.");
             System.out.println("Manual upgrade:");
-            System.out.println("  jbang app install --fresh --force --name aictx \\");
-            System.out.println("    \"git+ssh://git@<git-host>/<org>/aictx-cli.git#subdirectory=tools/aictx&ref=<version>\"");
+            System.out.println("  " + installCmd);
             return 1;
         }
 
@@ -253,17 +276,18 @@ class AictxUpgrade implements Callable<Integer> {
             return 0;
         }
 
-        String cmd = "jbang app install --fresh --force --name aictx " +
-                "\"git+ssh://git@<git-host>/<org>/aictx-cli.git#subdirectory=tools/aictx&ref=" + latestTag + "\"";
-
         if (execute) {
             System.out.println("Upgrading to " + latestTag + "...");
-            ProcessBuilder pb = new ProcessBuilder("sh", "-c", cmd);
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c", installCmd);
             pb.inheritIO();
             Process p = pb.start();
             int exitCode = p.waitFor();
             if (exitCode == 0) {
                 System.out.println("Upgraded to " + latestTag);
+                // Also refresh the context library
+                System.out.println("Updating context library...");
+                VersionUtil.downloadContext(VersionUtil.getContextCacheDir());
+                System.out.println("Context library updated.");
             } else {
                 System.err.println("Upgrade failed (exit code " + exitCode + ")");
             }
@@ -271,7 +295,7 @@ class AictxUpgrade implements Callable<Integer> {
         } else {
             System.out.println("Update available: " + currentVersion + " → " + latestTag);
             System.out.println("Run this command to upgrade:");
-            System.out.println("  " + cmd);
+            System.out.println("  " + installCmd);
             System.out.println("\nOr run: aictx upgrade --execute");
             return 0;
         }
