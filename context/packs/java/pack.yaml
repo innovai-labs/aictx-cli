@@ -1,0 +1,15 @@
+id: java
+description: Context pack for Java backend services (Spring Boot, Micronaut, Quarkus)
+appliesToRepoTypes:
+  - java-service
+defaultGlobals:
+  - pr-review
+  - testing
+  - security
+defaultSkills:
+  - pr-review-checklist
+  - java-service-skeleton
+defaultMcpToolset: backend-default
+pathRules:
+  - paths/migrations.instructions.md
+  - paths/infra.instructions.md

@@ -1,0 +1,26 @@
+# aictx context configuration for a Flutter app
+schemaVersion: 1
+
+repoType: flutter-app
+
+packs:
+  - flutter
+
+globals:
+  - pr-review
+  - testing
+
+skills:
+  - pr-review-checklist
+  - flutter-feature-patterns
+
+mcp:
+  toolset: frontend-default
+  servers:
+    - internal-docs
+
+outputs:
+  copilot: true
+  claude: true
+  codex: true
+  vscodeMcp: true

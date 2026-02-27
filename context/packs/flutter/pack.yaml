@@ -1,0 +1,14 @@
+id: flutter
+description: Context pack for Flutter mobile and web applications
+appliesToRepoTypes:
+  - flutter-app
+defaultGlobals:
+  - pr-review
+  - testing
+defaultSkills:
+  - pr-review-checklist
+  - flutter-feature-patterns
+defaultMcpToolset: frontend-default
+pathRules:
+  - paths/pubspec.instructions.md
+  - paths/tests.instructions.md

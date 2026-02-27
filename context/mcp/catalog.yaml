@@ -1,0 +1,72 @@
+# MCP Server Catalog
+# Defines available MCP servers and toolsets for aictx-managed projects.
+# No secrets here — authentication is handled by the developer's tool sign-in flow.
+
+servers:
+  - name: context7
+    description: Up-to-date documentation and code examples for any library
+    url: https://context7.com
+    whenToUse: When you need current documentation for a library or framework
+    type: remote
+
+  - name: internal-docs
+    description: Internal engineering documentation and runbooks
+    url: "{{INTERNAL_DOCS_MCP_URL}}"
+    whenToUse: When answering questions about internal services, architecture, or processes
+    type: remote
+
+  - name: service-catalog
+    description: Service registry with ownership, dependencies, and health info
+    url: "{{SERVICE_CATALOG_MCP_URL}}"
+    whenToUse: When looking up service ownership, dependencies, or operational status
+    type: remote
+
+  - name: runbooks
+    description: Operational runbooks for incident response and common procedures
+    url: "{{RUNBOOKS_MCP_URL}}"
+    whenToUse: When responding to incidents or following operational procedures
+    type: remote
+
+  - name: dart-mcp
+    description: Dart and Flutter development tools (analysis, testing, formatting)
+    command: dart tooling-daemon
+    whenToUse: When working with Dart or Flutter projects for analysis, testing, or formatting
+    type: stdio
+
+  - name: postgres
+    description: PostgreSQL database access for development
+    url: "{{POSTGRES_MCP_URL}}"
+    whenToUse: When querying or inspecting the development database
+    type: remote
+
+toolsets:
+  - name: backend-default
+    description: Default MCP toolset for Java backend services
+    recommendedForRepoTypes:
+      - java-service
+    servers:
+      - context7
+      - internal-docs
+      - service-catalog
+      - postgres
+
+  - name: frontend-default
+    description: Default MCP toolset for Flutter applications
+    recommendedForRepoTypes:
+      - flutter-app
+    servers:
+      - context7
+      - internal-docs
+      - dart-mcp
+
+  - name: full-stack
+    description: Combined toolset for full-stack development
+    recommendedForRepoTypes:
+      - java-service
+      - flutter-app
+    servers:
+      - context7
+      - internal-docs
+      - service-catalog
+      - dart-mcp
+      - postgres

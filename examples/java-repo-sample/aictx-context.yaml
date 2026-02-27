@@ -1,0 +1,28 @@
+# aictx context configuration for a Java service
+schemaVersion: 1
+
+repoType: java-service
+
+packs:
+  - java
+
+globals:
+  - pr-review
+  - testing
+  - security
+
+skills:
+  - pr-review-checklist
+  - java-service-skeleton
+
+mcp:
+  toolset: backend-default
+  servers:
+    - internal-docs
+    - service-catalog
+
+outputs:
+  copilot: true
+  claude: true
+  codex: true
+  vscodeMcp: true
