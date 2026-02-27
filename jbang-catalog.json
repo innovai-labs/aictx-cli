@@ -1,0 +1,8 @@
+{
+  "aliases": {
+    "aictx": {
+      "script-ref": "tools/aictx/aictx.java",
+      "description": "AI Context CLI - generates tool-specific instruction files and MCP configs from a central context library."
+    }
+  }
+}
